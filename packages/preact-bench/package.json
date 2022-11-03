@@ -5,9 +5,7 @@
   "scripts": {
     "build": "preact build",
     "serve": "sirv build --cors --single",
-    "dev": "preact watch",
-    "lint": "eslint src",
-    "test": "jest"
+    "dev": "preact watch"
   },
   "eslintConfig": {
     "parser": "@typescript-eslint/parser",
