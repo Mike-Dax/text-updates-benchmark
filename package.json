@@ -1,0 +1,12 @@
+{
+  "name": "text-updates-benchmark",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Mike-Dax/text-updates-benchmark.git",
+  "author": "Michael Orenstein <michael@whiteshadows.me>",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@3.2.4"
+}
