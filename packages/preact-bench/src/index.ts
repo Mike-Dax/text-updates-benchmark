@@ -1,3 +1,3 @@
-import App from './components/app';
+import App from './components/signal-optimised';
 
 export default App;

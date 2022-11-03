@@ -20,34 +20,24 @@ class BareEmitter<T> {
 
 const emitter = new BareEmitter<number>();
 
-const Bench = () => {
-  const [state, setState] = useState(0);
+class Bench extends Component<{}, {value: number}> {
+  constructor() {
+    super();
+    this.state = { value: 0 };
+  }
 
-  useEffect(() => {
-    emitter.subscribe(setState);
-  }, [setState]);
+  // Lifecycle: Called whenever our component is created
+  componentDidMount() {
+    emitter.subscribe((value: number) => {
+      this.setState({ value });
+      this.forceUpdate()
+    })
+  }
 
-  return <div>{state}</div>;
-};
-
-// class Bench extends Component<{}, {value: number}> {
-//   constructor() {
-//     super();
-//     this.state = { value: 0 };
-//   }
-
-//   // Lifecycle: Called whenever our component is created
-//   componentDidMount() {
-//     emitter.subscribe((value: number) => {
-//       this.setState({ value });
-//       this.forceUpdate()
-//     })
-//   }
-
-//   render() {
-//     return <span>{this.state.value}</span>;
-//   }
-// }
+  render() {
+    return <span>{this.state.value}</span>;
+  }
+}
 
 export default Bench;
 
