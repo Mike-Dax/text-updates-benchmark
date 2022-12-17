@@ -91,11 +91,10 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
   const outlierLimits = calculateOutlierLimits(measurements)
 
   console.log('Calculating outliers...')
-  const {
-    normal: normalCount,
-    mild: mildCount,
-    severe: severeCount,
-  } = classifyMeasurements(measurements, outlierLimits)
+  const { normalCount, mildCount, severeCount, mildOutliers, severeOutliers } = classifyMeasurements(
+    measurements,
+    outlierLimits,
+  )
 
   const outliersTotal = mildCount + severeCount
   const measurementCount = measurements.length
@@ -113,6 +112,13 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
 
     if (outliersTotal / measurementCount > 0.01) {
       console.error(`more than 1% of iterations were outliers`)
+    }
+
+    for (const outlier of mildOutliers) {
+      console.log(`- mild outlier: ${timeString(outlier.elapsedTime / outlier.iterations)}`)
+    }
+    for (const outlier of severeOutliers) {
+      console.log(`- severe outlier: ${timeString(outlier.elapsedTime / outlier.iterations)}`)
     }
   } else {
     console.log(`no outliers`)
@@ -136,14 +142,43 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
     }),
   )
 
-  for (const stat of Object.keys(bootstrapResults)) {
-    console.log(
-      `${stat}: ${timeString(bootstrapResults[stat as keyof typeof bootstrapResults].stat)} (lb: ${timeString(
-        bootstrapResults[stat as keyof typeof bootstrapResults].lb,
-      )} ub: ${timeString(bootstrapResults[stat as keyof typeof bootstrapResults].ub)})`,
+  const timeKeys = ['mean', 'stddev', 'median', 'mad']
+
+  for (const statKey of Object.keys(bootstrapResults)) {
+    const stat = bootstrapResults[statKey as keyof typeof bootstrapResults].stat
+    const lb = bootstrapResults[statKey as keyof typeof bootstrapResults].lb
+    const ub = bootstrapResults[statKey as keyof typeof bootstrapResults].ub
+
+    if (timeKeys.includes(statKey)) {
+      console.log(`${statKey}: ${timeString(stat)} (lb: ${timeString(lb)} ub: ${timeString(ub)})`)
+    } else {
+      console.log(
+        `${statKey}: ${Math.round(stat * 1000) / 1000} (lb: ${Math.round(lb * 1000) / 1000} ub: ${
+          Math.round(ub * 1000) / 1000
+        })`,
+      )
+    }
+  }
+
+  if (bootstrapResults.r2.stat < 0.9) {
+    console.error(`R² is too low, system experiencing noise: ${Math.round(bootstrapResults.r2.stat * 1000) / 1000}`)
+  } else if (bootstrapResults.r2.stat < 0.99) {
+    console.error(
+      `R² is problematic, perhaps rerun the benchmark: ${Math.round(bootstrapResults.r2.stat * 1000) / 1000}`,
     )
   }
+
+  console.log(`measurements: ${JSON.stringify(measurements)}`)
+  console.log(`bootstrapResults: ${JSON.stringify(bootstrapResults)}`)
 }
+
+/*
+mean: 6.7µs (lb: 6.6µs ub: 6.9µs)
+stddev: 1µs (lb: 0.3µs ub: 1.4µs)
+median: 6.6µs (lb: 6.4µs ub: 6.7µs)
+mad: 0.3µs (lb: 0.2µs ub: 0.3µs)
+r2: 0.8903866793421763 (lb: 0.9 ub: 0.9)
+*/
 
 // collecting 100 samples, 1911 iterations each, in estimated 995.8188 ms
 
@@ -184,37 +219,49 @@ function calculateOutlierLimits(measurements: Measurement[]): OutlierLimits {
 }
 
 type ClassifiedMeasurementCounts = {
-  normal: number
-  mild: number
-  severe: number
+  normalCount: number
+  mildCount: number
+  severeCount: number
+
+  mildOutliers: Measurement[]
+  severeOutliers: Measurement[]
 }
 
 function classifyMeasurements(measurements: Measurement[], outlierLimits: OutlierLimits): ClassifiedMeasurementCounts {
-  let normal = 0
-  let mild = 0
-  let severe = 0
+  let normalCount = 0
+  let mildCount = 0
+  let severeCount = 0
+
+  const mildOutliers: Measurement[] = []
+  const severeOutliers: Measurement[] = []
 
   for (let index = 0; index < measurements.length; index++) {
     const measurement = measurements[index]
     const time = measurement.elapsedTime / measurement.iterations
 
     if (time < outlierLimits.severeMin) {
-      severe++
+      severeCount++
+      severeOutliers.push(measurement)
     } else if (time < outlierLimits.mildMin) {
-      mild++
+      mildCount++
+      mildOutliers.push(measurement)
     } else if (time > outlierLimits.severeMax) {
-      severe++
+      severeCount++
+      severeOutliers.push(measurement)
     } else if (time > outlierLimits.mildMax) {
-      mild++
+      mildCount++
+      mildOutliers.push(measurement)
     } else {
-      normal++
+      normalCount++
     }
   }
 
   return {
-    normal,
-    mild,
-    severe,
+    normalCount,
+    mildCount,
+    severeCount,
+    mildOutliers,
+    severeOutliers,
   }
 }
 
@@ -332,7 +379,7 @@ function doMeasurements(
   const measurementStart = Date.now()
 
   while (true) {
-    const iterations = N * minIterations
+    const iterations = Math.ceil(N * minIterations)
 
     console.log(`Running ${iterations} iterations on run ${N}`)
 
@@ -422,6 +469,8 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
     resampledStatsBag[statKey] = new Array(resamples)
   }
 
+  // const samplingTimingStart = Date.now()
+
   // For each resample iteration
   for (let i = 0; i < resamples; i++) {
     // Sample with replacement into the sampleScratch array
@@ -444,6 +493,8 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
     }
   }
 
+  // console.log(`resampling ${timeString(Date.now() - samplingTimingStart)}`)
+
   // For each statistic
 
   const results: {
@@ -465,8 +516,8 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
     const mean = ss.mean(samples)
 
     // Calculate the lower and upper bounds of the statistics
-    const lowerBound = ss.quantileSorted(samples, 0.5 - confidenceInterval / 2)
-    const upperBound = ss.quantileSorted(samples, 0.5 + confidenceInterval / 2)
+    const lowerBound = ss.quantileSorted(samples, 1 - confidenceInterval)
+    const upperBound = ss.quantileSorted(samples, confidenceInterval)
 
     results[statKey] = {
       stat: baseStats[statKey],
@@ -477,3 +528,5 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
 
   return results
 }
+
+// Recalculate the stats, probably mostly the stddev, with and without the outliers to determine the effect size of them.
