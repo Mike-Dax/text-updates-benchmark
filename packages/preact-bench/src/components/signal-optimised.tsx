@@ -1,41 +1,40 @@
-import { h, Component } from "preact";
-import { useState, useEffect } from "preact/hooks";
+import { h, Component } from 'preact'
+import { useState, useEffect } from 'preact/hooks'
 
-import { options } from "preact";
+import { options } from 'preact'
+
+import { bench } from 'bench'
 
 // Disable automatic setState batching
-options.debounceRendering = (f) => f();
+options.debounceRendering = f => f()
 
-import { signal } from "@preact/signals";
+import { signal } from '@preact/signals'
 
 // Create a signal that can be subscribed to:
-const count = signal(0);
+const count = signal(0)
 
 const Bench = () => {
-  return <div>{count}</div>;
-};
+  return <div>{count}</div>
+}
 
-export default Bench;
-
-const RUNS = 100_000;
+export default Bench
 
 async function main() {
   // Wait for the app to render
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 500))
 
-  const start = Date.now();
+  // Benchmark the function
+  let index = 0
+  bench(`preact-signal-optimised`, () => {
+    // no setup
 
-  for (let index = 0; index < RUNS; index++) {
-    count.value = index;
-  }
-
-  const end = Date.now();
-
-  console.log(
-    `${RUNS} runs complete, diff ${end - start}ms, ${
-      ((end - start) / RUNS) * 1000
-    }µs per update`
-  );
+    // iteration function
+    return () => {
+      count.value = index
+    }
+  })
 }
 
-main();
+main()
+
+// 100000 runs complete, diff 26ms, 0.25999999999999995µs per update

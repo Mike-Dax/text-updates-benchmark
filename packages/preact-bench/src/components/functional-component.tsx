@@ -1,56 +1,55 @@
-import { h, Component } from "preact";
-import { StateUpdater, useState, useEffect } from "preact/hooks";
+import { h, Component } from 'preact'
+import { StateUpdater, useState, useEffect } from 'preact/hooks'
 
-import { options } from "preact";
+import { options } from 'preact'
+
+import { bench } from 'bench'
 
 // Disable automatic setState batching
-options.debounceRendering = (f) => f();
+options.debounceRendering = f => f()
 
 class BareEmitter<T> {
-  private subscriber: (value: T) => void = () => {};
+  private subscriber: (value: T) => void = () => {}
 
   public emit = (value: T) => {
-    this.subscriber(value);
-  };
+    this.subscriber(value)
+  }
 
   public subscribe = (subscriber: (value: T) => void) => {
-    this.subscriber = subscriber;
-  };
+    this.subscriber = subscriber
+  }
 }
 
-const emitter = new BareEmitter<number>();
+const emitter = new BareEmitter<number>()
 
 const Bench = () => {
-  const [state, setState] = useState(0);
+  const [state, setState] = useState(0)
 
   useEffect(() => {
-    emitter.subscribe(setState);
-  }, [setState]);
+    emitter.subscribe(setState)
+  }, [setState])
 
-  return <div>{state}</div>;
-};
+  return <div>{state}</div>
+}
 
-export default Bench;
-
-const RUNS = 100_000;
+export default Bench
 
 async function main() {
   // Wait for the app to render
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 500))
 
-  const start = Date.now();
+  // Benchmark the function
+  let index = 0
+  bench(`react-functional-component`, () => {
+    // no setup
 
-  for (let index = 0; index < RUNS; index++) {
-    emitter.emit(index);
-  }
-
-  const end = Date.now();
-
-  console.log(
-    `${RUNS} runs complete, diff ${end - start}ms, ${
-      ((end - start) / RUNS) * 1000
-    }µs per update`
-  );
+    // iteration function
+    return () => {
+      emitter.emit(index++)
+    }
+  })
 }
 
-main();
+main()
+
+// 100000 runs complete, diff 473ms, 4.7299999999999995µs per update
