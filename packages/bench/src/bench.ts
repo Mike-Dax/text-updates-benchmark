@@ -10,25 +10,43 @@ type Measurement = {
   elapsedTime: Milliseconds // the amount of milliseconds it took to do that many iterations
 }
 
+function getNow() {
+  const hr = process.hrtime()
+  const hrStamp = hr[0] * 1000 + hr[1] / 1e6
+
+  return hrStamp
+}
+
 // Convert a time into a string
 function timeString(time: Milliseconds) {
+  const DECIMAL_PLACES = 3
+
   if (time > 1_000) {
     // Between 1 and 10 seconds, show seconds to one decimal place
-    // Math.round(( val / 1000 ) * 10) / 10
-    const seconds = Math.round(time / 100) / 10
+    const seconds = (time / 1000).toFixed(DECIMAL_PLACES)
 
     return `${seconds}s`
   } else if (time > 1) {
     // Between 1ms and 1 second, milliseconds to 1 decimal places
-    const milliseconds = Math.round(time * 10) / 10
+    const milliseconds = time.toFixed(DECIMAL_PLACES)
 
     return `${milliseconds}ms`
+  } else if (time > 1e-3) {
+    // Between 1µs and 1 ms, µs to 1 decimal places
+    const microseconds = (time * 1000).toFixed(DECIMAL_PLACES)
+
+    return `${microseconds}µs`
+  } else if (time > 1e-6) {
+    // Between 1ns and 1 µs, ns to 1 decimal places
+    const nanoseconds = (time * 1000 * 1000).toFixed(DECIMAL_PLACES)
+
+    return `${nanoseconds}ns`
   }
 
-  // Below 1ms, display microseconds
-  const microseconds = Math.round(time * 1000 * 10) / 10
+  // Between 1ps and 1 ns, ps to 1 decimal places
+  const picoseconds = (time * 1000 * 1000 * 1000).toFixed(DECIMAL_PLACES)
 
-  return `${microseconds}µs`
+  return `${picoseconds}ps`
 }
 
 interface BenchSettings {
@@ -55,16 +73,16 @@ interface BenchSettings {
 }
 
 const defaultSettings: BenchSettings = {
-  minMeasurementTime: 2_000,
-  maxMeasurementTime: 30_000,
+  minMeasurementTime: 2_000, // also the warmup time
+  maxMeasurementTime: 60_000,
   targetSignificanceLevel: 0.05,
-  clockFactor: 1_000,
+  clockFactor: 10_000,
   bootstrapResamples: 100_000, // 100k in criterion
   confidenceInterval: 0.95,
 }
 
 // The bench function runs a sample function a bunch of times and returns some statistics
-export function bench(name: string, samplerFactory: Sampler, settings: Partial<BenchSettings> = {}) {
+export async function bench(name: string, samplerFactory: Sampler, settings: Partial<BenchSettings> = {}) {
   console.log('Characterising our clock...')
 
   const settingsWithDefaults = Object.assign({}, defaultSettings, settings)
@@ -75,10 +93,10 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
   )
 
   console.log('Characterising our sampling function...')
-  const coarseTimePerIteration = warmup(samplerFactory, 2000)
+  const coarseTimePerIteration = warmup(samplerFactory, settingsWithDefaults.minMeasurementTime)
 
   console.log('Sampling...')
-  const measurements = doMeasurements(
+  const measurements = await doMeasurements(
     samplerFactory,
     clockMinimumSamplingDuration,
     coarseTimePerIteration,
@@ -91,7 +109,7 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
   const outlierLimits = calculateOutlierLimits(measurements)
 
   console.log('Calculating outliers...')
-  const { normalCount, mildCount, severeCount, mildOutliers, severeOutliers } = classifyMeasurements(
+  const { normalCount, mildCount, severeCount, mildOutliers, severeOutliers, normalValues } = classifyMeasurements(
     measurements,
     outlierLimits,
   )
@@ -153,18 +171,43 @@ export function bench(name: string, samplerFactory: Sampler, settings: Partial<B
       console.log(`${statKey}: ${timeString(stat)} (lb: ${timeString(lb)} ub: ${timeString(ub)})`)
     } else {
       console.log(
-        `${statKey}: ${Math.round(stat * 1000) / 1000} (lb: ${Math.round(lb * 1000) / 1000} ub: ${
-          Math.round(ub * 1000) / 1000
+        `${statKey}: ${Math.round(stat * 10_000) / 10_000} (lb: ${Math.round(lb * 10_000) / 10_000} ub: ${
+          Math.round(ub * 10_000) / 10_000
         })`,
       )
     }
   }
 
   if (bootstrapResults.r2.stat < 0.9) {
-    console.error(`R² is too low, system experiencing noise: ${Math.round(bootstrapResults.r2.stat * 1000) / 1000}`)
+    console.error(`R² is too low, system experiencing noise: ${Math.round(bootstrapResults.r2.stat * 10_000) / 10_000}`)
   } else if (bootstrapResults.r2.stat < 0.99) {
     console.error(
-      `R² is problematic, perhaps rerun the benchmark: ${Math.round(bootstrapResults.r2.stat * 1000) / 1000}`,
+      `R² is problematic, perhaps rerun the benchmark: ${Math.round(bootstrapResults.r2.stat * 10_000) / 10_000}`,
+    )
+  }
+
+  if (outliersTotal > 0) {
+    // Recalculate stddev without outliers
+    const timesNoOutliers = normalValues.map(m => m.elapsedTime / m.iterations)
+
+    const stdDevNoOutliers = ss.standardDeviation(timesNoOutliers)
+    const stdDevWithOutliers = bootstrapResults.stddev.stat
+
+    const stdDevAsResultOfOutliers = stdDevWithOutliers - stdDevNoOutliers
+
+    console.log(
+      `normal value count: ${normalCount}/${measurementCount} (${
+        Math.round((normalCount / measurementCount) * 100 * 10) / 10
+      }%)`,
+    )
+    console.log(`stdDevNoOutliers: ${timeString(stdDevNoOutliers)}`)
+    console.log(`stdDevWithOutliers: ${timeString(stdDevWithOutliers)}`)
+    console.log(`stdDevAsResultOfOutliers: ${timeString(stdDevAsResultOfOutliers)}`)
+
+    console.log(
+      `percentage of stddev as outlier: ${
+        Math.round((stdDevAsResultOfOutliers / stdDevWithOutliers) * 100 * 10) / 10
+      }%`,
     )
   }
 
@@ -225,6 +268,7 @@ type ClassifiedMeasurementCounts = {
 
   mildOutliers: Measurement[]
   severeOutliers: Measurement[]
+  normalValues: Measurement[]
 }
 
 function classifyMeasurements(measurements: Measurement[], outlierLimits: OutlierLimits): ClassifiedMeasurementCounts {
@@ -232,6 +276,7 @@ function classifyMeasurements(measurements: Measurement[], outlierLimits: Outlie
   let mildCount = 0
   let severeCount = 0
 
+  const normalValues: Measurement[] = []
   const mildOutliers: Measurement[] = []
   const severeOutliers: Measurement[] = []
 
@@ -253,6 +298,7 @@ function classifyMeasurements(measurements: Measurement[], outlierLimits: Outlie
       mildOutliers.push(measurement)
     } else {
       normalCount++
+      normalValues.push(measurement)
     }
   }
 
@@ -262,6 +308,7 @@ function classifyMeasurements(measurements: Measurement[], outlierLimits: Outlie
     severeCount,
     mildOutliers,
     severeOutliers,
+    normalValues,
   }
 }
 
@@ -290,15 +337,15 @@ function minIterationTimeForInsignificantClockInterference(clockFactor: number):
   // Do 10k clock iterations to get a rough idea of how long it takes to call
   let estimatedClockCost = 0
   {
-    const start = performance.now()
+    const start = getNow()
     const clockIterations = 10_000
 
     let dontoptimisemeout = 0
     for (let index = 0; index < clockIterations; index++) {
-      dontoptimisemeout = performance.now()
+      dontoptimisemeout = getNow()
     }
 
-    const end = performance.now()
+    const end = getNow()
 
     // This will never be a 0, but the runtime won't know that
     if (dontoptimisemeout === 0) {
@@ -315,10 +362,10 @@ function minIterationTimeForInsignificantClockInterference(clockFactor: number):
   // Count how many iterations it takes for the clock to change value
   // So we can estimate rounding
   {
-    let t0 = performance.now()
-    let t1 = performance.now()
+    let t0 = getNow()
+    let t1 = getNow()
     while (t0 === t1) {
-      t1 = performance.now()
+      t1 = getNow()
     }
 
     estimatedClockPrecision = t1 - t0
@@ -359,14 +406,14 @@ function warmup(samplerFactory: Sampler, warmupTime: Milliseconds): Milliseconds
   return coarseTime / coarseIterations
 }
 
-function doMeasurements(
+async function doMeasurements(
   samplerFactory: Sampler,
   minimumIterationTimeForClockInterference: Milliseconds, // the minimum sampling duration where the clock is not statistically significant
   coarseTimePerIteration: Milliseconds, // estimation for a single iteration
   minMeasurementTime: Milliseconds, // 2 seconds min
   maxMeasurementTime: Milliseconds, // 10 seconds max
   targetSignificanceLevel: number, // 0.05
-): Measurement[] {
+): Promise<Measurement[]> {
   // Calculate the minimum number of samples to do such that the clock time is not significant
   const minIterations = Math.ceil(minimumIterationTimeForClockInterference / coarseTimePerIteration)
 
@@ -386,11 +433,11 @@ function doMeasurements(
     // We ignore the setup time
     const sampler = samplerFactory()
 
-    const start = performance.now()
+    const start = getNow()
     for (let i = 0; i < iterations; i++) {
       sampler()
     }
-    const end = performance.now()
+    const end = getNow()
 
     measurements.push({
       iterations,
@@ -408,6 +455,9 @@ function doMeasurements(
       console.log(`measurementDuration: ${timeString(measurementDuration)}`)
       break
     }
+
+    // Yield to the event loop
+    await new Promise(resolve => setTimeout(resolve, 0))
 
     // If we have more than one measurement, and the measurement duration is greater than the minimum measurement duration
     // then we can calculate the standard deviation of the measurements and check if it is below the threshold
@@ -505,6 +555,9 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
     }
   } = {} as any
 
+  // 95% confidenceInterval is significanceVal is 5%, so 2.5% and 97.5% quantile
+  const significanceVal = 1 - confidenceInterval
+
   for (let j = 0; j < statKeyLength; j++) {
     const statKey = statKeys[j]
     const samples = resampledStatsBag[statKey]
@@ -512,12 +565,9 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
     // In place, sort the samples
     samples.sort()
 
-    const numSamples = samples.length
-    const mean = ss.mean(samples)
-
     // Calculate the lower and upper bounds of the statistics
-    const lowerBound = ss.quantileSorted(samples, 1 - confidenceInterval)
-    const upperBound = ss.quantileSorted(samples, confidenceInterval)
+    const lowerBound = ss.quantileSorted(samples, significanceVal / 2)
+    const upperBound = ss.quantileSorted(samples, 1 - significanceVal / 2)
 
     results[statKey] = {
       stat: baseStats[statKey],
