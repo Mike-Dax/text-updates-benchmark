@@ -11,9 +11,3 @@ async function main() {
 }
 
 main()
-
-// todo:
-//
-// zustand
-// preact signals
-// electric ui
