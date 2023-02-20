@@ -11,6 +11,9 @@
   "devDependencies": {
     "@types/node": "^18.11.13"
   },
+  "browser": {
+    "fs": false
+  },
   "main": "lib/index.js",
   "types": "lib/index.d.ts"
 }
