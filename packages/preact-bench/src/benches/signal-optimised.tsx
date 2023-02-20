@@ -14,17 +14,18 @@ import { signal } from '@preact/signals'
 const count = signal(0)
 
 const Bench = () => {
-  return <div>{count.value}</div>
+  return <div>{count}</div>
 }
 
-export async function run(domNode: HTMLElement) {
-  // Render into the dom element
-  render(<Bench />, domNode)
+export default Bench
+
+async function run() {
+  await new Promise(res => setTimeout(res, 500))
 
   // Benchmark the function
   let index = 0
 
-  const results = await bench(`preact-signal-unoptimised`, () => {
+  const results = await bench(`preact-signal-optimised`, () => {
     // no setup
 
     // iteration function
@@ -33,8 +34,7 @@ export async function run(domNode: HTMLElement) {
     }
   })
 
-  // Unmount from the dom element
-  render(null, domNode)
-
   return results
 }
+
+run()

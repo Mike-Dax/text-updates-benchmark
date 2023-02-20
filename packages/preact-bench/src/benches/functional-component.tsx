@@ -33,9 +33,10 @@ const Bench = () => {
   return <div>{state}</div>
 }
 
-export async function run(domNode: HTMLElement) {
-  // Render into the dom element
-  render(<Bench />, domNode)
+export default Bench
+
+async function run() {
+  await new Promise(res => setTimeout(res, 500))
 
   // Benchmark the function
   let index = 0
@@ -49,8 +50,7 @@ export async function run(domNode: HTMLElement) {
     }
   })
 
-  // Unmount from the dom element
-  render(null, domNode)
-
   return results
 }
+
+run()

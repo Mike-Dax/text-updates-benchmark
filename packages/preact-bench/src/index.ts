@@ -1,3 +1,3 @@
-import App from './components/functional-component'
+import Component from './benches/signal-optimised'
 
-export default App
+export default Component
