@@ -76,7 +76,7 @@ interface BenchSettings {
 
 const defaultSettings: BenchSettings = {
   minMeasurementTime: 2_000, // also the warmup time
-  maxMeasurementTime: 10_000,
+  maxMeasurementTime: 60_000,
   targetSignificanceLevel: 0.05,
   clockFactor: 10_000,
   bootstrapResamples: 100_000, // 100k in criterion
