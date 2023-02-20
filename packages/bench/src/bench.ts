@@ -1,5 +1,7 @@
 import * as ss from 'simple-statistics'
 
+import fs from 'fs'
+
 // A function that returns a factory
 type Sampler = () => () => void
 type Milliseconds = number // float number of milliseconds
@@ -225,12 +227,21 @@ export async function bench(name: string, samplerFactory: Sampler, settings: Par
     console.log(`percentage of stddev as outlier: ${Math.round(outlierStats.percentageOfStdDevAsOutlier * 10) / 10}%`)
   }
 
-  return {
+  const ret = {
     name,
     measurements,
     bootstrapResults,
     outlierStats,
   }
+
+  // Write this stuff to file for convenience
+  try {
+    fs.mkdirSync(`/tmp/text-benchmarks/`)
+  } catch {}
+
+  fs.writeFileSync(`/tmp/text-benchmarks/${name}.json`, JSON.stringify(ret))
+
+  return ret
 }
 
 /*
