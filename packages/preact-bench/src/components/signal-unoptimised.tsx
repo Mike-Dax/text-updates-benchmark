@@ -1,4 +1,4 @@
-import { h, Component } from 'preact'
+import { h, Component, render } from 'preact'
 import { useState, useEffect } from 'preact/hooks'
 
 import { options } from 'preact'
@@ -17,26 +17,24 @@ const Bench = () => {
   return <div>{count.value}</div>
 }
 
-export default Bench
-
-const RUNS = 100_000
-
-async function main() {
-  // Wait for the app to render
-  await new Promise(resolve => setTimeout(resolve, 500))
+export async function run(domNode: HTMLElement) {
+  // Render into the dom element
+  render(<Bench />, domNode)
 
   // Benchmark the function
   let index = 0
-  bench(`preact-signal-optimised`, () => {
+
+  const results = await bench(`preact-signal-unoptimised`, () => {
     // no setup
 
     // iteration function
     return () => {
-      count.value = index
+      count.value = index++
     }
   })
+
+  // Unmount from the dom element
+  render(null, domNode)
+
+  return results
 }
-
-main()
-
-// 100000 runs complete, diff 528ms, 5.28µs per update

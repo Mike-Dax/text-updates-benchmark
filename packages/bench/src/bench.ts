@@ -74,7 +74,7 @@ interface BenchSettings {
 
 const defaultSettings: BenchSettings = {
   minMeasurementTime: 2_000, // also the warmup time
-  maxMeasurementTime: 60_000,
+  maxMeasurementTime: 10_000,
   targetSignificanceLevel: 0.05,
   clockFactor: 10_000,
   bootstrapResamples: 100_000, // 100k in criterion
@@ -83,6 +83,7 @@ const defaultSettings: BenchSettings = {
 
 // The bench function runs a sample function a bunch of times and returns some statistics
 export async function bench(name: string, samplerFactory: Sampler, settings: Partial<BenchSettings> = {}) {
+  console.log(`running bench ${name}`)
   console.log('Characterising our clock...')
 
   const settingsWithDefaults = Object.assign({}, defaultSettings, settings)
@@ -186,33 +187,50 @@ export async function bench(name: string, samplerFactory: Sampler, settings: Par
     )
   }
 
+  const outlierStats = {
+    stdDevNoOutliers: bootstrapResults.stddev.stat,
+    stdDevWithOutliers: bootstrapResults.stddev.stat,
+    stdDevAsResultOfOutliers: 0,
+    percentageOfStdDevAsOutlier: 0,
+    meanNoOutliers: bootstrapResults.mean.stat,
+    meanWithOutliers: bootstrapResults.mean.stat,
+  }
+
   if (outliersTotal > 0) {
     // Recalculate stddev without outliers
     const timesNoOutliers = normalValues.map(m => m.elapsedTime / m.iterations)
 
-    const stdDevNoOutliers = ss.standardDeviation(timesNoOutliers)
-    const stdDevWithOutliers = bootstrapResults.stddev.stat
+    outlierStats.stdDevNoOutliers = ss.standardDeviation(timesNoOutliers)
+    outlierStats.stdDevWithOutliers = bootstrapResults.stddev.stat
 
-    const stdDevAsResultOfOutliers = stdDevWithOutliers - stdDevNoOutliers
+    outlierStats.meanNoOutliers = ss.mean(timesNoOutliers)
+    outlierStats.meanWithOutliers = bootstrapResults.mean.stat
+
+    outlierStats.stdDevAsResultOfOutliers = outlierStats.stdDevWithOutliers - outlierStats.stdDevNoOutliers
 
     console.log(
       `normal value count: ${normalCount}/${measurementCount} (${
         Math.round((normalCount / measurementCount) * 100 * 10) / 10
       }%)`,
     )
-    console.log(`stdDevNoOutliers: ${timeString(stdDevNoOutliers)}`)
-    console.log(`stdDevWithOutliers: ${timeString(stdDevWithOutliers)}`)
-    console.log(`stdDevAsResultOfOutliers: ${timeString(stdDevAsResultOfOutliers)}`)
+    console.log(`meanNoOutliers: ${timeString(outlierStats.meanNoOutliers)}`)
+    console.log(`meanWithOutliers: ${timeString(outlierStats.meanWithOutliers)}`)
+    console.log(`stdDevNoOutliers: ${timeString(outlierStats.stdDevNoOutliers)}`)
+    console.log(`stdDevWithOutliers: ${timeString(outlierStats.stdDevWithOutliers)}`)
+    console.log(`stdDevAsResultOfOutliers: ${timeString(outlierStats.stdDevAsResultOfOutliers)}`)
 
-    console.log(
-      `percentage of stddev as outlier: ${
-        Math.round((stdDevAsResultOfOutliers / stdDevWithOutliers) * 100 * 10) / 10
-      }%`,
-    )
+    outlierStats.percentageOfStdDevAsOutlier =
+      (outlierStats.stdDevAsResultOfOutliers / outlierStats.stdDevWithOutliers) * 100
+
+    console.log(`percentage of stddev as outlier: ${Math.round(outlierStats.percentageOfStdDevAsOutlier * 10) / 10}%`)
   }
 
-  console.log(`measurements: ${JSON.stringify(measurements)}`)
-  console.log(`bootstrapResults: ${JSON.stringify(bootstrapResults)}`)
+  return {
+    name,
+    measurements,
+    bootstrapResults,
+    outlierStats,
+  }
 }
 
 /*
@@ -580,3 +598,11 @@ function bootstrapStatistics<Stats extends KeyedStatistics>(
 }
 
 // Recalculate the stats, probably mostly the stddev, with and without the outliers to determine the effect size of them.
+
+// ss.kernelDensityEstimation
+
+// Report the measurement differences as ratios instead of percentage differences
+
+// port of the historian crate https://docs.rs/historian/latest/historian/
+
+//

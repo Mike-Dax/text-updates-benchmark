@@ -1,4 +1,5 @@
-import { h, Component } from 'preact'
+import { h, Component, render } from 'preact'
+
 import { StateUpdater, useState, useEffect } from 'preact/hooks'
 
 import { options } from 'preact'
@@ -32,15 +33,14 @@ const Bench = () => {
   return <div>{state}</div>
 }
 
-export default Bench
-
-async function main() {
-  // Wait for the app to render
-  await new Promise(resolve => setTimeout(resolve, 500))
+export async function run(domNode: HTMLElement) {
+  // Render into the dom element
+  render(<Bench />, domNode)
 
   // Benchmark the function
   let index = 0
-  bench(`react-functional-component`, () => {
+
+  const results = await bench(`preact-functional-component`, () => {
     // no setup
 
     // iteration function
@@ -48,8 +48,9 @@ async function main() {
       emitter.emit(index++)
     }
   })
+
+  // Unmount from the dom element
+  render(null, domNode)
+
+  return results
 }
-
-main()
-
-// 100000 runs complete, diff 473ms, 4.7299999999999995µs per update

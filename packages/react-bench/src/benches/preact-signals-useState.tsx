@@ -6,25 +6,18 @@ import { flushSync } from 'react-dom'
 
 import { bench } from 'bench'
 
-class BareEmitter<T> {
-  private subscriber: (value: T) => void = () => {}
+import { signal, effect } from '@preact/signals-core'
 
-  public emit = (value: T) => {
-    this.subscriber(value)
-  }
-
-  public subscribe = (subscriber: (value: T) => void) => {
-    this.subscriber = subscriber
-  }
-}
-
-const emitter = new BareEmitter<number>()
+const counter = signal(0)
 
 const Updating = () => {
   const [state, setState] = useState(0)
 
   useEffect(() => {
-    emitter.subscribe(value => setState(value))
+    const unsub = effect(() => flushSync(() => setState(counter.value)))
+    return () => {
+      unsub()
+    }
   }, [setState])
 
   return <div>{state}</div>
@@ -48,13 +41,15 @@ export async function run(domNode: HTMLElement) {
 
   // Benchmark the function
   let index = 0
-  const results = await bench(`react-functional-component`, () => {
+  const results = await bench(`react-preact-signals-usestate`, () => {
     // no setup
 
     // iteration function
     return () => {
+      counter.value = index++
+
       flushSync(() => {
-        emitter.emit(index++)
+        counter.value = index++
       })
     }
   })
@@ -64,8 +59,8 @@ export async function run(domNode: HTMLElement) {
   return results
 }
 
-// mean: 6.615µs (lb: 6.548µs ub: 6.702µs)
-// stddev: 295.062ns (lb: 98.721ns ub: 442.379ns)
-// median: 6.557µs (lb: 6.530µs ub: 6.579µs)
-// mad: 49.736ns (lb: 34.639ns ub: 73.113ns)
-// r2: 0.9985 (lb: 0.9985 ub: 0.9985)
+// mean: 5.697µs (lb: 5.641µs ub: 5.764µs)
+// stddev: 154.230ns (lb: 70.271ns ub: 207.387ns)
+// median: 5.629µs (lb: 5.600µs ub: 5.744µs)
+// mad: 56.748ns (lb: 19.475ns ub: 124.711ns)
+// r2: 0.9989 (lb: 0.9989 ub: 0.9989)
