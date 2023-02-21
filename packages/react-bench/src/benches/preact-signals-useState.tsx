@@ -46,8 +46,6 @@ export async function run(domNode: HTMLElement) {
 
     // iteration function
     return () => {
-      counter.value = index++
-
       flushSync(() => {
         counter.value = index++
       })

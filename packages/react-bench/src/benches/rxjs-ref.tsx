@@ -70,7 +70,7 @@ export async function run(domNode: HTMLElement) {
 
   // Benchmark the function
   let index = 0
-  const results = await bench(`react-rxjs`, () => {
+  const results = await bench(`react-rxjs-ref`, () => {
     // no setup
 
     // iteration function

@@ -45,7 +45,7 @@ export async function run(domNode: HTMLElement) {
 
   // Benchmark the function
   let index = 0
-  const results = await bench(`react-functional-component`, () => {
+  const results = await bench(`react-rxjs-usestate`, () => {
     // no setup
 
     // iteration function

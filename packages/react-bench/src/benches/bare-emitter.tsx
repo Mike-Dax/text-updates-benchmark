@@ -76,7 +76,7 @@ export async function run(domNode: HTMLElement) {
   let index = 0
 
   // Benchmark the function
-  const results = await bench(`react-functional-component`, () => {
+  const results = await bench(`react-bare-emitter`, () => {
     // no setup
 
     // iteration function
